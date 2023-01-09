@@ -1,0 +1,108 @@
+
+#include "U8glib.h" // Inkludera biblioteket för att använda OLED-skärmen
+#include <Wire.h> // Inkludera biblioteket för I2C-kommunikation
+
+long instance1 = 0, timer; // Deklarera långa heltal för att lagra tidsstämpeln för det senaste toppen och en timer
+
+double hrv = 0, hr = 72, interval = 0; // Deklarera tal för att lagra HRV, hjärtfrekvensen och intervallen mellan toppar
+
+int value = 0, count = 0; // Deklarera heltal för att lagra läsningen från analogingången och räkna antalet toppar under en tidsperiod
+
+bool flag = 0; // Deklarera bool variabel för att flagga när en topp har identifierats
+
+#define shutdown_pin 10 // Definiera en konstant för att lagra pin-numret
+
+#define threshold -40 // Definiera en konstant för tröskelvärdet
+
+#define timer_value 10000 // Definiera en konstant för tidsvärdet för timer-variabeln
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+
+U8GLIB_SSD1306_128X64 oled(U8G_I2C_OPT_NONE); // Skapa ett objekt för att kommunicera med OLED-skärmen via I2C
+
+int pulse = hr; // Definiera en variabel för hjärtfrekvensen
+
+void setup() {
+  Serial.begin(9600); // Starta seriell kommunikation
+  
+  pinMode(8, INPUT); // Konfigurera pin 8 som en ingång för LO +
+  pinMode(9, INPUT); // Konfigurera pin 9 som en ingång för LO -
+}
+
+void updateOled() { // Uppdaterar OLED-skärmen
+
+  oled.setFont(u8g_font_helvB10); // Font för texten på OLED-skärmen
+
+  oled.firstPage(); // Starta en ny sida på OLED-skärmen
+  do
+ {
+    oled.drawStr(15, 15, String(hr).c_str()); // Skriver ut på OLED-skärmen
+
+} while (oled.nextPage());
+
+}
+
+void loop() {
+  updateOled(); // Anropar funktionen för att uppdatera OLED-skärmen
+
+  if ((digitalRead(8) == 1) || (digitalRead(9) == 1)) { // Kontrollera om någon av ingångarna för leads off detection är high
+
+    Serial.println("leads off!"); // Skriv ut ett meddelande till seriell monitor om leads off detection aktiveras
+
+    digitalWrite(shutdown_pin, LOW); // Sätter standby-läge
+    instance1 = micros(); // Spara tidsstämpeln för det senaste toppen
+    timer = millis(); // Starta timern
+  }
+
+  else {
+    digitalWrite(shutdown_pin, HIGH); // Sätter i normalläge
+
+    value = analogRead(A0); // Läs in en läsning från analogingången
+
+    value = -1 * map(value, 250, 400, 0, 100); // Mappa om värdet för att jämna ut ECG-värdena
+
+    if ((value > threshold) && (!flag)) { // Om värdet är högre än tröskelvärdet och flaggan är falsk
+
+      count++; // Öka räknaren för toppar
+
+      Serial.println("in"); // Skriv ut ett meddelande till seriell monitor
+   
+   flag = 1; // Sätter flaggan till sann
+
+      interval = micros() - instance1; // Beräkna intervallen mellan det senaste toppen
+      instance1 = micros(); // Spara tidsstämpeln för det nuvarande toppen
+    }
+
+    else if ((value < threshold)) { // Om värdet är lägre än tröskelvärdet
+      flag = 0; // Sätter flaggan till falsk
+    }
+    if ((millis() - timer) > 10000) { // Om timer-variabeln har passerat tidsvärdet
+      hr = count * 6; // Beräkna hjärtfrekvensen genom att multiplicera antalet toppar med 6, eftersom varje minut innehåller 60 sekunder
+    
+  timer = millis();
+
+count = 0; 
+
+}
+
+ hrv = hr / 60 - interval / 1000000; 
+
+Serial.print(" TSH: "); 
+Serial.print(threshold); 
+
+Serial.print(" heartrate: "); 
+Serial.print(hr); 
+
+Serial.print(" heartrate Value: "); 
+Serial.print(hrv); 
+
+Serial.print(" Graph: "); 
+Serial.println(value); 
+
+delay(1);
+
+ }
+
+ }
+
